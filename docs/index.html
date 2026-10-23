@@ -123,6 +123,11 @@
   <input type="text" id="location" placeholder="z.&nbsp;B. Bern, Marktgasse 12" autocomplete="off">
 </div>
 
+<div class="field">
+  <label for="size">Grösse</label>
+  <input type="text" id="size" placeholder="z.&nbsp;B. 120 × 80 cm" autocomplete="off" inputmode="text">
+</div>
+
 <div class="slots" id="slots"></div>
 
 <button class="primary" id="send" disabled>Senden</button>
@@ -145,9 +150,10 @@ const QUALITY  = 0.85;    // jpeg quality
 const subjectTemplate = ({ date, location }) =>
   `Fotodokumentation ${date} – ${location}`;
 
-const bodyTemplate = ({ date, location }) =>
+const bodyTemplate = ({ date, location, size }) =>
 `Datum: ${date}
 Ort: ${location}
+Grösse: ${size}
 
 Anhang: nah.jpg, fern.jpg, detail.jpg
 `;
@@ -158,7 +164,7 @@ const photos = Object.create(null);   // key -> File
 const urls   = Object.create(null);   // key -> objectURL
 
 const $ = (id) => document.getElementById(id);
-const dateEl = $("date"), locEl = $("location"),
+const dateEl = $("date"), locEl = $("location"), sizeEl = $("size"),
       sendEl = $("send"), resetEl = $("reset"), noteEl = $("note");
 
 /* ---------- build slot UI ---------- */
@@ -237,11 +243,15 @@ function fmtDate(iso) {
 }
 
 function values() {
-  return { date: fmtDate(dateEl.value), location: locEl.value.trim() };
+  return {
+    date: fmtDate(dateEl.value),
+    location: locEl.value.trim(),
+    size: sizeEl.value.trim(),
+  };
 }
 
 function ready() {
-  return dateEl.value && locEl.value.trim() &&
+  return dateEl.value && locEl.value.trim() && sizeEl.value.trim() &&
          SLOTS.every(s => photos[s.key]);
 }
 
@@ -253,6 +263,7 @@ function note(msg, warn) {
 }
 
 dateEl.addEventListener("input", refresh);
+sizeEl.addEventListener("input", refresh);
 locEl.addEventListener("input", () => {
   try { localStorage.setItem("fotomail.location", locEl.value); } catch (e) {}
   refresh();

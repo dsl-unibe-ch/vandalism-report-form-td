@@ -106,12 +106,24 @@
 
   .note { margin-top: 16px; font-size: 0.82rem; color: var(--muted); min-height: 1.4em; }
   .note.warn { color: var(--warn); }
+
+  .banner {
+    display: none;
+    padding: 14px 16px; margin-bottom: 20px;
+    border: 1px solid var(--warn); border-radius: var(--radius);
+    background: color-mix(in srgb, var(--warn) 10%, var(--surface));
+    color: var(--text); font-size: 0.9rem;
+  }
+  .banner.show { display: block; }
+  .banner b { color: var(--warn); }
 </style>
 </head>
 <body>
 
 <h1>Fotomail</h1>
 <p class="sub">Datum, Ort und drei Bilder &rarr; direkt an Outlook.</p>
+
+<div class="banner" id="banner"></div>
 
 <div class="field">
   <label for="date">Datum</label>
@@ -336,11 +348,29 @@ resetEl.addEventListener("click", () => {
 
 /* ---------- environment check ---------- */
 
-if (!window.isSecureContext) {
-  note("Kein sicherer Kontext (" + location.protocol + ") – Teilen nicht möglich, "
-     + "es greift der Fallback. Seite über HTTPS ausliefern.", true);
-} else if (typeof navigator.canShare !== "function") {
-  note("Dieser Browser kennt navigator.canShare nicht – es greift der Fallback.", true);
+// Probe with a dummy JPEG: same check the send button will make later.
+function fileSharingAvailable() {
+  try {
+    if (!window.isSecureContext) return false;
+    if (typeof navigator.canShare !== "function") return false;
+    const probe = new File([new Blob(["x"], { type: "image/jpeg" })],
+                           "probe.jpg", { type: "image/jpeg" });
+    return navigator.canShare({ files: [probe] });
+  } catch (e) {
+    return false;
+  }
+}
+
+if (!fileSharingAvailable()) {
+  const b = $("banner");
+  b.innerHTML = !window.isSecureContext
+    ? '<b>Seite nicht über HTTPS geladen.</b> Anhänge können nicht direkt ' +
+      'übergeben werden – die Bilder landen in „Downloads“ und müssen von Hand ' +
+      'angehängt werden.'
+    : '<b>Dieser Browser kann keine Anhänge weitergeben.</b> Diese Seite bitte ' +
+      'in <b>Chrome</b> öffnen. Sonst landen die Bilder nur in „Downloads“ und ' +
+      'müssen von Hand ans Mail angehängt werden.';
+  b.classList.add("show");
 }
 </script>
 </body>

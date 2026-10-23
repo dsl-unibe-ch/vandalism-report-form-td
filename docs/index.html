@@ -282,23 +282,28 @@ sendEl.addEventListener("click", async () => {
   const files = SLOTS.map(s => photos[s.key]);
   const data = { files, title: subjectTemplate(v), text: bodyTemplate(v) };
 
-  if (navigator.canShare && navigator.canShare({ files })) {
+  let reason;
+  if (!window.isSecureContext) {
+    reason = "kein sicherer Kontext (" + location.protocol + ")";
+  } else if (typeof navigator.canShare !== "function") {
+    reason = "navigator.canShare fehlt";
+  } else if (!navigator.canShare({ files })) {
+    reason = "canShare({files}) = false";
+  } else {
     try {
       await navigator.share(data);
       note("Geteilt.");
       return;
     } catch (err) {
       if (err.name === "AbortError") { note(""); return; }
-      note("Teilen fehlgeschlagen (" + err.name + ") – Fallback.", true);
+      reason = "share() " + err.name + ": " + err.message;
     }
-  } else {
-    note("Teilen nicht verfügbar – Fallback.", true);
   }
-  fallback(v, files);
+  fallback(v, files, reason);
 });
 
 // download the three files, then open a prefilled mail without attachments
-function fallback(v, files) {
+function fallback(v, files, reason) {
   for (const f of files) {
     const a = document.createElement("a");
     a.href = URL.createObjectURL(f);
@@ -310,7 +315,7 @@ function fallback(v, files) {
   }
   const q = "subject=" + encodeURIComponent(subjectTemplate(v)) +
             "&body="   + encodeURIComponent(bodyTemplate(v));
-  note("Bilder liegen in „Downloads“ – im Mail manuell anhängen.", true);
+  note("Fallback (" + reason + "): Bilder liegen in „Downloads“ – im Mail manuell anhängen.", true);
   setTimeout(() => { location.href = "mailto:?" + q; }, 800);
 }
 
@@ -331,8 +336,11 @@ resetEl.addEventListener("click", () => {
 
 /* ---------- environment check ---------- */
 
-if (location.protocol !== "https:" && location.hostname !== "localhost") {
-  note("Nur über HTTPS teilbar – sonst greift der Fallback.", true);
+if (!window.isSecureContext) {
+  note("Kein sicherer Kontext (" + location.protocol + ") – Teilen nicht möglich, "
+     + "es greift der Fallback. Seite über HTTPS ausliefern.", true);
+} else if (typeof navigator.canShare !== "function") {
+  note("Dieser Browser kennt navigator.canShare nicht – es greift der Fallback.", true);
 }
 </script>
 </body>

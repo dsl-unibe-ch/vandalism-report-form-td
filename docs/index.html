@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Fotomail</title>
+<title>Vandalismus-Meldung</title>
 <style>
   :root {
     --bg: #f4f4f2;
@@ -61,12 +61,23 @@
   label { display: block; font-size: 0.8rem; font-weight: 600; color: var(--muted);
           text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 6px; }
 
-  input[type="text"], input[type="date"] {
+  .hidden { display: none !important; }
+
+  .notice {
+    padding: 14px 16px; margin-bottom: 18px;
+    border: 1px solid var(--accent); border-radius: var(--radius);
+    background: color-mix(in srgb, var(--accent) 10%, var(--surface));
+    font-size: 0.9rem;
+  }
+  .notice a { color: var(--accent); }
+
+  input[type="text"], input[type="date"], select {
     width: 100%; padding: 12px 14px; font: inherit;
     background: var(--surface); color: var(--text);
     border: 1px solid var(--border); border-radius: var(--radius);
     appearance: none;
   }
+  select:focus-visible,
   input:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 
   .field { margin-bottom: 18px; }
@@ -120,24 +131,61 @@
 </head>
 <body>
 
-<h1>Fotomail</h1>
-<p class="sub">Datum, Ort und drei Bilder &rarr; direkt an Outlook.</p>
+<h1>Vandalismus-Meldung</h1>
+<p class="sub">Zeitraum, Adresse, Art der Beschädigung und drei Bilder &rarr; direkt an Outlook.</p>
 
 <div class="banner" id="banner"></div>
 
 <div class="field">
-  <label for="date">Datum</label>
-  <input type="date" id="date">
+  <label for="dateFrom">Datum von</label>
+  <input type="date" id="dateFrom">
 </div>
 
 <div class="field">
-  <label for="location">Ort</label>
-  <input type="text" id="location" placeholder="z.&nbsp;B. Bern, Marktgasse 12" autocomplete="off">
+  <label for="dateTo">Datum bis</label>
+  <input type="date" id="dateTo">
 </div>
 
 <div class="field">
-  <label for="size">Grösse</label>
-  <input type="text" id="size" placeholder="z.&nbsp;B. 120 × 80 cm" autocomplete="off" inputmode="text">
+  <label for="location">Adresse und genaue Bezeichnung</label>
+  <input type="text" id="location" placeholder="z.&nbsp;B. Bern, Marktgasse 12, Rückwand Velounterstand" autocomplete="off">
+</div>
+
+<div class="field">
+  <label for="kind">Art der Beschädigung</label>
+  <select id="kind">
+    <option value="" disabled selected>Bitte wählen</option>
+    <option value="graffiti">Graffiti</option>
+    <option value="sachbeschaedigung">Sachbeschädigung</option>
+    <option value="diebstahl">Diebstahl</option>
+    <option value="frei">Freie Auswahl</option>
+  </select>
+</div>
+
+<div class="field hidden" id="f-area">
+  <label for="area">m2</label>
+  <input type="text" id="area" placeholder="z.&nbsp;B. 4.5" autocomplete="off" inputmode="decimal">
+</div>
+
+<div class="field hidden" id="f-kindFree">
+  <label for="kindFree">Art der Sachbeschädigung</label>
+  <input type="text" id="kindFree" placeholder="z.&nbsp;B. Glasbruch, Lampe demoliert" autocomplete="off">
+</div>
+
+<div class="field hidden" id="f-kindOwn">
+  <label for="kindOwn">Art der Beschädigung (eigene Angabe)</label>
+  <input type="text" id="kindOwn" placeholder="kurze Beschreibung" autocomplete="off">
+</div>
+
+<div class="field hidden" id="f-amount">
+  <label for="amount">Schadenssumme (CHF)</label>
+  <input type="text" id="amount" placeholder="z.&nbsp;B. 1200" autocomplete="off" inputmode="decimal">
+</div>
+
+<div class="notice hidden" id="theftNotice">
+  <b>Diebstahl</b><br>
+  Bitte Details zu Vorfall via Mail an
+  <a href="mailto:vandalismus.bt@unibe.ch">vandalismus.bt@unibe.ch</a>
 </div>
 
 <div class="slots" id="slots"></div>
@@ -159,16 +207,30 @@ const SLOTS = [
 const MAX_EDGE = 2000;    // longest side in px after downscale
 const QUALITY  = 0.85;    // jpeg quality
 
-const subjectTemplate = ({ date, location }) =>
-  `Fotodokumentation ${date} – ${location}`;
+const KINDS = {
+  graffiti:          { label: "Graffiti",          fields: ["area", "amount"] },
+  sachbeschaedigung: { label: "Sachbeschädigung", fields: ["kindFree", "amount"] },
+  diebstahl:         { label: "Diebstahl",         fields: [], notice: true },
+  frei:              { label: "Freie Auswahl",     fields: ["kindOwn", "amount"] },
+};
 
-const bodyTemplate = ({ date, location, size }) =>
-`Datum: ${date}
-Ort: ${location}
-Grösse: ${size}
+const subjectTemplate = ({ dateFrom, dateTo, location, kindLabel }) =>
+  `Vandalismus-Meldung ${dateFrom}–${dateTo} – ${location} (${kindLabel})`;
 
-Anhang: nah.jpg, fern.jpg, detail.jpg
-`;
+const bodyTemplate = (v) => {
+  const lines = [
+    `Datum von: ${v.dateFrom}`,
+    `Datum bis: ${v.dateTo}`,
+    `Adresse und genaue Bezeichnung: ${v.location}`,
+    `Art der Beschädigung: ${v.kindLabel}`,
+  ];
+  if (v.area)     lines.push(`m2: ${v.area}`);
+  if (v.kindFree) lines.push(`Art der Sachbeschädigung: ${v.kindFree}`);
+  if (v.kindOwn)  lines.push(`Beschreibung: ${v.kindOwn}`);
+  if (v.amount)   lines.push(`Schadenssumme (CHF): ${v.amount}`);
+  lines.push("", "Anhang: nah.jpg, fern.jpg, detail.jpg", "");
+  return lines.join("\n");
+};
 
 /* ---------- state ---------- */
 
@@ -176,8 +238,12 @@ const photos = Object.create(null);   // key -> File
 const urls   = Object.create(null);   // key -> objectURL
 
 const $ = (id) => document.getElementById(id);
-const dateEl = $("date"), locEl = $("location"), sizeEl = $("size"),
+const fromEl = $("dateFrom"), toEl = $("dateTo"), locEl = $("location"),
+      kindEl = $("kind"), areaEl = $("area"), kindFreeEl = $("kindFree"),
+      kindOwnEl = $("kindOwn"), amountEl = $("amount"),
       sendEl = $("send"), resetEl = $("reset"), noteEl = $("note");
+
+const EXTRA = { area: areaEl, kindFree: kindFreeEl, kindOwn: kindOwnEl, amount: amountEl };
 
 /* ---------- build slot UI ---------- */
 
@@ -255,15 +321,36 @@ function fmtDate(iso) {
 }
 
 function values() {
-  return {
-    date: fmtDate(dateEl.value),
+  const kind = kindEl.value;
+  const cfg = KINDS[kind];
+  const v = {
+    kind,
+    kindLabel: cfg ? cfg.label : "",
+    dateFrom: fmtDate(fromEl.value),
+    dateTo: fmtDate(toEl.value),
     location: locEl.value.trim(),
-    size: sizeEl.value.trim(),
   };
+  for (const name of (cfg ? cfg.fields : []))
+    v[name] = EXTRA[name].value.trim();
+  return v;
+}
+
+// show only the fields that belong to the selected kind
+function applyKind() {
+  const cfg = KINDS[kindEl.value];
+  const shown = cfg ? cfg.fields : [];
+  for (const name of Object.keys(EXTRA))
+    $("f-" + name).classList.toggle("hidden", !shown.includes(name));
+  $("theftNotice").classList.toggle("hidden", !(cfg && cfg.notice));
+  refresh();
 }
 
 function ready() {
-  return dateEl.value && locEl.value.trim() && sizeEl.value.trim() &&
+  const cfg = KINDS[kindEl.value];
+  if (!cfg) return false;
+  // Schadenssumme darf leer bleiben, der Rest nicht
+  const missing = cfg.fields.some(n => n !== "amount" && !EXTRA[n].value.trim());
+  return fromEl.value && toEl.value && locEl.value.trim() && !missing &&
          SLOTS.every(s => photos[s.key]);
 }
 
@@ -274,17 +361,21 @@ function note(msg, warn) {
   noteEl.classList.toggle("warn", !!warn);
 }
 
-dateEl.addEventListener("input", refresh);
-sizeEl.addEventListener("input", refresh);
+fromEl.addEventListener("input", refresh);
+toEl.addEventListener("input", refresh);
+kindEl.addEventListener("change", applyKind);
+for (const el of Object.values(EXTRA)) el.addEventListener("input", refresh);
 locEl.addEventListener("input", () => {
-  try { localStorage.setItem("fotomail.location", locEl.value); } catch (e) {}
+  try { localStorage.setItem("vandalismus.location", locEl.value); } catch (e) {}
   refresh();
 });
 
 // defaults
-dateEl.value = new Date().toLocaleDateString("sv-SE");   // yyyy-mm-dd, local tz
-try { locEl.value = localStorage.getItem("fotomail.location") || ""; } catch (e) {}
-refresh();
+const today = new Date().toLocaleDateString("sv-SE");    // yyyy-mm-dd, local tz
+fromEl.value = today;
+toEl.value   = today;
+try { locEl.value = localStorage.getItem("vandalismus.location") || ""; } catch (e) {}
+applyKind();
 
 /* ---------- send ---------- */
 
@@ -342,8 +433,10 @@ resetEl.addEventListener("click", () => {
     $("slot-" + s.key).classList.remove("filled");
     $("sub-" + s.key).textContent = s.filename;
   }
+  for (const el of Object.values(EXTRA)) el.value = "";
+  kindEl.selectedIndex = 0;
+  applyKind();
   note("");
-  refresh();
 });
 
 /* ---------- environment check ---------- */
